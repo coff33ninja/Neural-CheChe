@@ -1,0 +1,18 @@
+# Neural CheChe Requirements
+
+# Core dependencies
+torch>=2.0.0
+numpy>=1.21.0
+tqdm
+# Game libraries
+python-chess>=1.999
+draughts>=1.3.0
+
+# Visualization
+pygame>=2.1.0
+
+# Optional GPU acceleration (Windows)
+# torch-directml  # Uncomment for DirectML support on Windows
+
+# Development and testing
+# pytest>=7.0.0  # Uncomment for testing framework
