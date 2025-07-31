@@ -3,3 +3,13 @@
 /neural_cheche/league/__pycache__
 /neural_cheche/__pycache__
 /neural_cheche/core/__pycache__
+/neural_cheche/games/checkers/__pycache__
+/neural_cheche/config/__pycache__
+/neural_cheche/games/chess/__pycache__
+/neural_cheche/games/__pycache__
+/move_history/games
+/logs
+/neural_cheche/history/__pycache__
+/neural_cheche/progress/__pycache__
+/neural_cheche/utils/__pycache__
+/neural_cheche/validation/__pycache__
