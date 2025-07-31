@@ -18,13 +18,14 @@ class Match:
     """Represents a single game match between two agents"""
     
     def __init__(self, agent1, agent2, game_type, visualize=False, enable_validation=True, 
-                 generation=0, move_logger=None, score_tracker=None):
+                 generation=0, move_logger=None, score_tracker=None, game_number=None):
         self.agent1 = agent1
         self.agent2 = agent2
         self.game_type = game_type
         self.visualize = visualize
         self.enable_validation = enable_validation
         self.generation = generation
+        self.game_number = game_number or 1  # Default to 1 if not provided
         
         # History tracking
         self.move_logger = move_logger
@@ -53,6 +54,10 @@ class Match:
         self.final_reward = 0
         self.validation_violations = []
         self.captured_pieces = {"white": [], "black": []}
+    
+    def set_game_number(self, game_number):
+        """Set the game number for this match"""
+        self.game_number = game_number
     
     def play(self, replay_buffer=None, renderer=None, visualization_manager=None):
         """Play the match and return experiences and result"""
@@ -293,54 +298,157 @@ class Match:
             return "Draw"
     
     def _update_visualization(self, vis_manager, renderer, current_agent):
-        """Update visualization during the match"""
+        """Update visualization during the match - enhanced version"""
         if not vis_manager or not renderer:
             return
         
-        vis_manager.clear_screen()
-        
-        # Draw the board
-        offset_x = vis_manager.chess_offset_x if self.game_type == "chess" else vis_manager.checkers_offset_x
-        title = f"{self.game_type.title()} - {current_agent.name} thinking..."
-        
-        renderer.draw_board(
-            vis_manager.screen, self.board, 
-            offset_x, vis_manager.board_offset_y, 
-            title
-        )
-        
-        # Show thinking indicator
-        vis_manager.display_thinking_indicator(
-            self.game_type, current_agent.name, self.move_count
-        )
-        
-        vis_manager.refresh_display()
-        vis_manager.process_events()
+        try:
+            # Update game state in visualization manager
+            vis_manager.update_game_state(
+                game_number=self.game_number,
+                generation=self.generation,
+                phase="Playing"
+            )
+            
+            # Set game number in visualization manager
+            vis_manager.set_game_number(self.game_number)
+            
+            # Create comprehensive game state
+            game_state = {
+                "board": self.board,
+                "current_player": current_agent.name,
+                "move_count": self.move_count,
+                "max_moves": self.max_moves,
+                "thinking": True,
+                "captured_pieces": getattr(renderer, 'captured_pieces', {"white": [], "black": []}) if hasattr(renderer, 'captured_pieces') else {"white": [], "black": []}
+            }
+            
+            # Use comprehensive display
+            if self.game_type == "chess":
+                vis_manager.display_comprehensive_game_state(chess_state=game_state)
+            else:
+                vis_manager.display_comprehensive_game_state(checkers_state=game_state)
+            
+            # Draw the actual board with enhanced features
+            offset_x = vis_manager.chess_offset_x if self.game_type == "chess" else vis_manager.checkers_offset_x
+            
+            if hasattr(renderer, 'draw_board_with_captured_pieces'):
+                renderer.draw_board_with_captured_pieces(
+                    vis_manager.screen, self.board,
+                    offset_x, vis_manager.board_offset_y,
+                    f"{self.game_type.title()} - {current_agent.name} thinking...",
+                    None, None, vis_manager.captured_pieces_renderer
+                )
+            else:
+                renderer.draw_board(
+                    vis_manager.screen, self.board, 
+                    offset_x, vis_manager.board_offset_y, 
+                    f"{self.game_type.title()} - {current_agent.name} thinking..."
+                )
+            
+            # Show thinking indicator
+            vis_manager.display_thinking_indicator(
+                self.game_type, current_agent.name, self.move_count
+            )
+            
+            vis_manager.refresh_display()
+            vis_manager.process_events()
+            
+        except Exception as e:
+            print(f"⚠️ Error in enhanced visualization update: {e}")
+            # Fallback to basic visualization
+            vis_manager.clear_screen()
+            offset_x = vis_manager.chess_offset_x if self.game_type == "chess" else vis_manager.checkers_offset_x
+            renderer.draw_board(
+                vis_manager.screen, self.board, 
+                offset_x, vis_manager.board_offset_y, 
+                f"{self.game_type.title()} - {current_agent.name} thinking..."
+            )
+            vis_manager.refresh_display()
     
     def _show_move_result(self, vis_manager, renderer, move):
-        """Show the result of a move"""
+        """Show the result of a move - enhanced version"""
         if not vis_manager or not renderer:
             return
         
-        vis_manager.clear_screen()
-        
-        # Draw updated board
-        offset_x = vis_manager.chess_offset_x if self.game_type == "chess" else vis_manager.checkers_offset_x
-        title = f"{self.game_type.title()} - Move {self.move_count}"
-        
-        renderer.draw_board(
-            vis_manager.screen, self.board,
-            offset_x, vis_manager.board_offset_y,
-            title, last_move=move
-        )
-        
-        # Show move statistics
-        vis_manager.display_move_statistics(self.game_type, self.move_count, self.max_moves)
-        
-        vis_manager.refresh_display()
-        
-        # Brief pause to show the move
-        vis_manager.wait_with_events(0.1)
+        try:
+            # Determine player info
+            current_player = self.game.get_current_player(self.board)
+            current_agent = self.agent1 if current_player == 1 else self.agent2
+            player_type = "Alpha" if current_agent == self.agent1 else "Beta"
+            
+            # Extract move information
+            move_from = str(getattr(move, 'from_square', getattr(move, 'start', '?')))
+            move_to = str(getattr(move, 'to_square', getattr(move, 'end', '?')))
+            
+            # Display move with enhanced player info
+            position = "top" if player_type == "Alpha" else "bottom"
+            vis_manager.display_move_with_player_info(
+                self.game_type, current_agent.name, move_from, move_to, player_type, position
+            )
+            
+            # Update captured pieces if renderer supports it
+            if hasattr(renderer, 'update_captured_pieces'):
+                # This would need the board before the move, but we'll work with what we have
+                renderer.update_captured_pieces(None, self.board, move)
+            
+            # Create comprehensive game state for display
+            game_state = {
+                "board": self.board,
+                "last_move": move,
+                "move_count": self.move_count,
+                "max_moves": self.max_moves,
+                "move_info": {
+                    f"{position}_player": {
+                        "name": current_agent.name,
+                        "type": player_type,
+                        "move_from": move_from,
+                        "move_to": move_to
+                    }
+                },
+                "captured_pieces": getattr(renderer, 'captured_pieces', {"white": [], "black": []}) if hasattr(renderer, 'captured_pieces') else {"white": [], "black": []}
+            }
+            
+            # Use comprehensive display
+            if self.game_type == "chess":
+                vis_manager.display_comprehensive_game_state(chess_state=game_state)
+            else:
+                vis_manager.display_comprehensive_game_state(checkers_state=game_state)
+            
+            # Draw the board with enhanced features
+            offset_x = vis_manager.chess_offset_x if self.game_type == "chess" else vis_manager.checkers_offset_x
+            
+            if hasattr(renderer, 'draw_board_with_captured_pieces'):
+                renderer.draw_board_with_captured_pieces(
+                    vis_manager.screen, self.board,
+                    offset_x, vis_manager.board_offset_y,
+                    f"{self.game_type.title()} - Move {self.move_count}",
+                    move, None, vis_manager.captured_pieces_renderer
+                )
+            else:
+                renderer.draw_board(
+                    vis_manager.screen, self.board,
+                    offset_x, vis_manager.board_offset_y,
+                    f"{self.game_type.title()} - Move {self.move_count}", last_move=move
+                )
+            
+            vis_manager.refresh_display()
+            
+            # Brief pause to show the move
+            vis_manager.wait_with_events(0.1)
+            
+        except Exception as e:
+            print(f"⚠️ Error in enhanced move result display: {e}")
+            # Fallback to basic visualization
+            vis_manager.clear_screen()
+            offset_x = vis_manager.chess_offset_x if self.game_type == "chess" else vis_manager.checkers_offset_x
+            renderer.draw_board(
+                vis_manager.screen, self.board,
+                offset_x, vis_manager.board_offset_y,
+                f"{self.game_type.title()} - Move {self.move_count}", last_move=move
+            )
+            vis_manager.refresh_display()
+            vis_manager.wait_with_events(0.1)
     
     def _log_move(self, agent, move, board_before, board_after, thinking_time):
         """Log a move to the move logger"""
@@ -454,6 +562,7 @@ class Competition:
         self.visualization_manager = visualization_manager
         self.enable_validation = enable_validation
         self.enable_history = enable_history
+        self.game_counter = 0  # Track total games played
         self.match_history = []
         self.validation_statistics = {
             'total_violations': 0,
@@ -493,8 +602,25 @@ class Competition:
         self.error_handling_config = error_config
         print("🔧 Error handling configuration updated")
     
+    def reset_game_counter(self):
+        """Reset the game counter to 0"""
+        self.game_counter = 0
+        print("🔄 Game counter reset")
+    
+    def get_current_game_number(self):
+        """Get the current game number"""
+        return self.game_counter
+    
+    def set_game_counter(self, count):
+        """Set the game counter to a specific value"""
+        self.game_counter = count
+        print(f"🎯 Game counter set to {count}")
+    
     def play_match(self, agent1, agent2, game_type, visualize=False, replay_buffer=None, generation=0):
         """Play a single match between two agents"""
+        # Increment game counter
+        self.game_counter += 1
+        
         # Get appropriate renderer
         renderer = None
         if visualize and self.visualization_manager:
@@ -505,10 +631,11 @@ class Competition:
                 from ..games.checkers import CheckersRenderer
                 renderer = CheckersRenderer()
         
-        # Create and play match
+        # Create and play match with game number
         match = Match(agent1, agent2, game_type, visualize, self.enable_validation, generation,
                      self.move_logger if self.enable_history else None,
-                     self.score_tracker if self.enable_history else None)
+                     self.score_tracker if self.enable_history else None, 
+                     game_number=self.game_counter)
         experiences, reward = match.play(replay_buffer, renderer, self.visualization_manager)
         
         # Update validation statistics
