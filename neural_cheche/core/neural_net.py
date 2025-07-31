@@ -2,9 +2,10 @@
 Unified neural network architecture for multiple games
 """
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from ..error_handling import handle_system_error, ErrorCategory, ErrorSeverity
+from ..error_handling.decorators import handle_errors
 
 
 class GameNet(nn.Module):
@@ -64,29 +65,56 @@ class GameNet(nn.Module):
             nn.BatchNorm2d(channels)
         )
     
+    @handle_errors(
+        category=ErrorCategory.TRAINING,
+        severity=ErrorSeverity.HIGH,
+        component="neural_network_forward",
+        max_retries=2,
+        fallback_value=(None, None)
+    )
     def forward(self, x, game_type):
         """Forward pass through the network"""
-        # Shared feature extraction
-        x = self.shared_backbone(x)
-        
-        # Apply residual blocks
-        for block in self.residual_blocks:
-            residual = x
-            x = block(x)
-            x = F.relu(x + residual)
-        
-        # Value prediction (shared)
-        value = self.value_head(x)
-        
-        # Policy prediction (game-specific)
-        if game_type == "chess":
-            policy = self.chess_policy_head(x)
-        elif game_type == "checkers":
-            policy = self.checkers_policy_head(x)
-        else:
-            raise ValueError(f"Unsupported game type: {game_type}")
-        
-        return F.softmax(policy, dim=1), value
+        try:
+            # Shared feature extraction
+            x = self.shared_backbone(x)
+            
+            # Apply residual blocks
+            for block in self.residual_blocks:
+                residual = x
+                x = block(x)
+                x = F.relu(x + residual)
+            
+            # Value prediction (shared)
+            value = self.value_head(x)
+            
+            # Policy prediction (game-specific)
+            if game_type == "chess":
+                policy = self.chess_policy_head(x)
+            elif game_type == "checkers":
+                policy = self.checkers_policy_head(x)
+            else:
+                handle_system_error(
+                    error=ValueError(f"Unsupported game type: {game_type}"),
+                    component="GameNet",
+                    operation="forward",
+                    context={"game_type": game_type, "input_shape": x.shape},
+                    severity=ErrorSeverity.HIGH,
+                    category=ErrorCategory.TRAINING
+                )
+                raise ValueError(f"Unsupported game type: {game_type}")
+            
+            return F.softmax(policy, dim=1), value
+            
+        except Exception as e:
+            handle_system_error(
+                error=e,
+                component="GameNet",
+                operation="forward",
+                context={"game_type": game_type, "input_shape": x.shape if hasattr(x, 'shape') else 'unknown'},
+                severity=ErrorSeverity.HIGH,
+                category=ErrorCategory.TRAINING
+            )
+            raise
     
     def get_device(self):
         """Get the device this model is on"""

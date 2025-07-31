@@ -5,6 +5,8 @@ Monte Carlo Tree Search implementation
 import numpy as np
 import torch
 from ..utils.gpu_utils import clear_gpu_memory
+from ..error_handling import handle_system_error, ErrorCategory, ErrorSeverity
+from ..error_handling.decorators import handle_errors, graceful_degradation
 
 
 class MCTSNode:
@@ -61,70 +63,105 @@ class MCTS:
         self.num_simulations = num_simulations
         self.device = net.get_device()
 
+    @handle_errors(
+        category=ErrorCategory.TRAINING,
+        severity=ErrorSeverity.HIGH,
+        component="mcts_search",
+        max_retries=1,
+        fallback_value={}
+    )
     def search(self, board):
         """Run MCTS search and return policy"""
         print(f"[MCTS] Starting search with {self.num_simulations} simulations")
 
-        root = MCTSNode(self.game, board)
-
-        # Get legal moves
-        legal_moves = self.game.get_legal_moves(board)
-        if not legal_moves:
-            print("[MCTS] No legal moves available")
-            return {}
-
-        print(f"[MCTS] Found {len(legal_moves)} legal moves")
-
-        # Initial policy evaluation
         try:
-            policy, _ = self._evaluate_position(board)
+            root = MCTSNode(self.game, board)
 
-            # Add Dirichlet noise for exploration
-            alpha = 0.3
-            noise = np.random.dirichlet([alpha] * len(legal_moves))
-            epsilon = 0.25
-            noisy_policy = (1 - epsilon) * policy[: len(legal_moves)] + epsilon * noise
+            # Get legal moves
+            legal_moves = self.game.get_legal_moves(board)
+            if not legal_moves:
+                print("[MCTS] No legal moves available")
+                return {}
 
-            root.expand(noisy_policy, legal_moves)
-            print(f"[MCTS] Root expanded with {len(root.children)} children")
+            print(f"[MCTS] Found {len(legal_moves)} legal moves")
 
-        except Exception as e:
-            print(f"[MCTS] Error in initial evaluation: {e}")
-            # Fallback to uniform policy
-            uniform_policy = np.ones(len(legal_moves)) / len(legal_moves)
-            root.expand(uniform_policy, legal_moves)
-
-        # Run simulations
-        for sim_idx in range(self.num_simulations):
+            # Initial policy evaluation
             try:
-                if sim_idx % 5 == 0:
-                    print(f"[MCTS] Simulation {sim_idx}/{self.num_simulations}")
-                    self._process_events()  # Keep GUI responsive
+                policy, _ = self._evaluate_position(board)
 
-                self._simulate(root)
+                # Add Dirichlet noise for exploration
+                alpha = 0.3
+                noise = np.random.dirichlet([alpha] * len(legal_moves))
+                epsilon = 0.25
+                noisy_policy = (1 - epsilon) * policy[: len(legal_moves)] + epsilon * noise
+
+                root.expand(noisy_policy, legal_moves)
+                print(f"[MCTS] Root expanded with {len(root.children)} children")
 
             except Exception as e:
-                print(f"[MCTS] Simulation {sim_idx} failed: {e}")
-                continue
+                handle_system_error(
+                    error=e,
+                    component="MCTS",
+                    operation="initial_evaluation",
+                    context={"legal_moves_count": len(legal_moves)},
+                    severity=ErrorSeverity.MEDIUM,
+                    category=ErrorCategory.TRAINING
+                )
+                # Fallback to uniform policy
+                uniform_policy = np.ones(len(legal_moves)) / len(legal_moves)
+                root.expand(uniform_policy, legal_moves)
 
-        # Clear GPU memory after search
-        clear_gpu_memory()
+            # Run simulations
+            successful_simulations = 0
+            for sim_idx in range(self.num_simulations):
+                try:
+                    if sim_idx % 5 == 0:
+                        print(f"[MCTS] Simulation {sim_idx}/{self.num_simulations}")
+                        self._process_events()  # Keep GUI responsive
 
-        # Return visit counts as policy
-        if not root.children:
-            print("[MCTS] Warning: No children in root node")
+                    self._simulate(root)
+                    successful_simulations += 1
+
+                except Exception as e:
+                    handle_system_error(
+                        error=e,
+                        component="MCTS",
+                        operation="simulation",
+                        context={"simulation_index": sim_idx, "successful_sims": successful_simulations},
+                        severity=ErrorSeverity.LOW,
+                        category=ErrorCategory.TRAINING
+                    )
+                    continue
+
+            # Clear GPU memory after search
+            clear_gpu_memory()
+
+            # Return visit counts as policy
+            if not root.children:
+                print("[MCTS] Warning: No children in root node")
+                return {}
+
+            total_visits = sum(child.visits for child in root.children.values())
+            if total_visits == 0:
+                print("[MCTS] Warning: No visits recorded")
+                return {move: 1.0 / len(root.children) for move in root.children.keys()}
+
+            result = {
+                move: child.visits / total_visits for move, child in root.children.items()
+            }
+            print(f"[MCTS] Search complete. Returning policy with {len(result)} moves ({successful_simulations}/{self.num_simulations} successful simulations)")
+            return result
+            
+        except Exception as e:
+            handle_system_error(
+                error=e,
+                component="MCTS",
+                operation="search",
+                context={"num_simulations": self.num_simulations},
+                severity=ErrorSeverity.HIGH,
+                category=ErrorCategory.TRAINING
+            )
             return {}
-
-        total_visits = sum(child.visits for child in root.children.values())
-        if total_visits == 0:
-            print("[MCTS] Warning: No visits recorded")
-            return {move: 1.0 / len(root.children) for move in root.children.keys()}
-
-        result = {
-            move: child.visits / total_visits for move, child in root.children.items()
-        }
-        print(f"[MCTS] Search complete. Returning policy with {len(result)} moves")
-        return result
 
     def _simulate(self, root):
         """Run a single MCTS simulation"""
@@ -153,22 +190,38 @@ class MCTS:
         # Backpropagation phase
         node.backpropagate(value)
 
+    @graceful_degradation(fallback_value=(np.array([1.0]), 0.0), log_errors=True, component="position_evaluation")
     def _evaluate_position(self, board):
         """Evaluate position using neural network"""
-        state_tensor = self.game.board_to_tensor(
-            board, [], device=torch.device("cpu")
-        ).unsqueeze(0)
+        try:
+            state_tensor = self.game.board_to_tensor(
+                board, [], device=torch.device("cpu")
+            ).unsqueeze(0)
 
-        # Move to device for inference
-        if self.device.type != "cpu":
-            state_tensor = state_tensor.to(self.device)
+            # Move to device for inference
+            if self.device.type != "cpu":
+                state_tensor = state_tensor.to(self.device)
 
-        with torch.no_grad():
-            policy, value = self.net(state_tensor, self.game.name)
-            policy = policy.detach().cpu().numpy().flatten()
-            value = value.detach().cpu().item()
+            with torch.no_grad():
+                policy, value = self.net(state_tensor, self.game.name)
+                policy = policy.detach().cpu().numpy().flatten()
+                value = value.detach().cpu().item()
 
-        return policy, value
+            return policy, value
+            
+        except Exception as e:
+            handle_system_error(
+                error=e,
+                component="MCTS",
+                operation="evaluate_position",
+                context={"game_name": self.game.name, "device": str(self.device)},
+                severity=ErrorSeverity.MEDIUM,
+                category=ErrorCategory.TRAINING
+            )
+            # Return uniform policy and neutral value as fallback
+            legal_moves = self.game.get_legal_moves(board)
+            uniform_policy = np.ones(len(legal_moves)) / len(legal_moves) if legal_moves else np.array([1.0])
+            return uniform_policy, 0.0
 
     def _process_events(self):
         """Process pygame events to keep GUI responsive"""

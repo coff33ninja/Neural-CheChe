@@ -6,6 +6,8 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from ..utils.gpu_utils import clear_gpu_memory
+from ..error_handling import ErrorHandler, ErrorCategory, ErrorSeverity, handle_system_error
+from ..error_handling.decorators import handle_errors
 
 
 class TrainingManager:
@@ -15,7 +17,18 @@ class TrainingManager:
         self.net = net
         self.optimizer = optimizer
         self.device = device
+        
+        # Initialize error handler
+        self.error_handler = ErrorHandler()
     
+    @handle_errors(
+        category=ErrorCategory.TRAINING,
+        severity=ErrorSeverity.HIGH,
+        component="training_step",
+        recovery_scenario="training_step_failed",
+        max_retries=3,
+        fallback_value={"total_loss": 0.0, "policy_loss": 0.0, "value_loss": 0.0}
+    )
     def train_step(self, batch, game_type="chess"):
         """Perform a single training step"""
         try:
@@ -88,7 +101,14 @@ class TrainingManager:
             }
             
         except Exception as e:
-            print(f"[TrainingManager] Training step error: {e}")
+            handle_system_error(
+                error=e,
+                component="TrainingManager",
+                operation="train_step",
+                context={"game_type": game_type, "batch_size": len(batch)},
+                severity=ErrorSeverity.HIGH,
+                category=ErrorCategory.TRAINING
+            )
             clear_gpu_memory()
             return {"total_loss": 0.0, "policy_loss": 0.0, "value_loss": 0.0}
     
@@ -128,6 +148,14 @@ class TrainingManager:
             print(f"[TrainingManager] Evaluation error: {e}")
             return {"value_accuracy": 0.0, "batch_size": 0}
     
+    @handle_errors(
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        component="checkpoint_save",
+        recovery_scenario="file_not_found",
+        max_retries=2,
+        suppress_errors=True
+    )
     def save_checkpoint(self, filepath, generation, additional_info=None):
         """Save training checkpoint"""
         try:
@@ -145,7 +173,14 @@ class TrainingManager:
             print(f"[TrainingManager] Checkpoint saved to {filepath}")
             
         except Exception as e:
-            print(f"[TrainingManager] Error saving checkpoint: {e}")
+            handle_system_error(
+                error=e,
+                component="TrainingManager",
+                operation="save_checkpoint",
+                context={"filepath": filepath, "generation": generation},
+                severity=ErrorSeverity.MEDIUM,
+                category=ErrorCategory.FILE_IO
+            )
     
     def load_checkpoint(self, filepath):
         """Load training checkpoint"""

@@ -8,9 +8,11 @@ import shutil
 import gzip
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 
 from .data_models import GenerationSummary, HistoryEncoder
+from ..error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
+from ..error_handling.decorators import handle_errors
 
 
 class BackupManager:
@@ -21,11 +23,21 @@ class BackupManager:
         self.compress_backups = True
         self.retention_days = 30
         
+        # Initialize error handler
+        self.error_handler = ErrorHandler()
+        
         # Create backup structure
         self.create_backup_structure()
         
         print(f"💾 BackupManager initialized with directory: {self.base_directory}")
     
+    @handle_errors(
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        component="backup_structure",
+        recovery_scenario="file_not_found",
+        max_retries=2
+    )
     def create_backup_structure(self) -> None:
         """Create organized backup directory structure"""
         try:
@@ -62,8 +74,22 @@ class BackupManager:
             print(f"📁 Backup structure created with {len(directories)} directories")
             
         except Exception as e:
-            print(f"⚠️ Failed to create backup structure: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.MEDIUM,
+                component="BackupManager",
+                context={"operation": "create_backup_structure", "directory": str(self.base_directory)}
+            )
     
+    @handle_errors(
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        component="game_history_backup",
+        recovery_scenario="file_not_found",
+        max_retries=2,
+        fallback_value=""
+    )
     def save_game_history(self, game_data: Dict[str, Any], timestamp: str) -> str:
         """
         Save game history with timestamp
@@ -114,7 +140,13 @@ class BackupManager:
             return backup_path
             
         except Exception as e:
-            print(f"⚠️ Failed to save game history: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.MEDIUM,
+                component="BackupManager",
+                context={"operation": "save_game_history", "game_id": game_data.get('game_info', {}).get('game_id', 'unknown')}
+            )
             return ""
     
     def save_generation_summary(self, generation: int, summary: Dict[str, Any]) -> str:

@@ -6,6 +6,9 @@ from typing import Dict, List, Any, Optional
 import sys
 from datetime import datetime, timedelta
 
+from ..error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
+from ..error_handling.decorators import handle_errors, graceful_degradation
+
 try:
     from tqdm import tqdm
     TQDM_AVAILABLE = True
@@ -21,6 +24,9 @@ class CLIProgress:
         self.total_generations = total_generations
         self.current_generation = 0
         
+        # Initialize error handler
+        self.error_handler = ErrorHandler()
+        
         # Progress bars
         self.generation_bar: Optional[tqdm] = None
         self.phase_bar: Optional[tqdm] = None
@@ -32,6 +38,15 @@ class CLIProgress:
         # Initialize generation progress bar
         self.create_generation_bar()
     
+    @handle_errors(
+        category=ErrorCategory.PROGRESS,
+        severity=ErrorSeverity.LOW,
+        component="cli_progress_bar",
+        recovery_scenario="progress_display_failed",
+        max_retries=1,
+        suppress_errors=True,
+        fallback_value=None
+    )
     def create_generation_bar(self) -> Optional[tqdm]:
         """Create the main generation progress bar"""
         if not TQDM_AVAILABLE:
@@ -54,7 +69,13 @@ class CLIProgress:
             return self.generation_bar
             
         except Exception as e:
-            print(f"⚠️ Failed to create generation bar: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.PROGRESS,
+                severity=ErrorSeverity.LOW,
+                component="CLIProgress",
+                context={"operation": "create_generation_bar", "total_generations": self.total_generations}
+            )
             return None
     
     def create_phase_bar(self, phase_name: str, total_steps: int) -> Optional[tqdm]:
@@ -93,6 +114,7 @@ class CLIProgress:
             print(f"⚠️ Failed to create phase bar: {e}")
             return None
     
+    @graceful_degradation(fallback_value=None, log_errors=True, component="generation_update")
     def update_generation(self, current: int, metrics: Dict[str, Any]) -> None:
         """
         Update generation progress
@@ -117,7 +139,13 @@ class CLIProgress:
                 self.generation_bar.refresh()
                 
             except Exception as e:
-                print(f"⚠️ Generation update failed: {e}")
+                self.error_handler.handle_error(
+                    error=e,
+                    category=ErrorCategory.PROGRESS,
+                    severity=ErrorSeverity.LOW,
+                    component="CLIProgress",
+                    context={"operation": "update_generation", "generation": current}
+                )
         else:
             # Fallback display
             progress_pct = (current / self.total_generations) * 100

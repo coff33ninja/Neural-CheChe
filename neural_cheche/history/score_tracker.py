@@ -4,11 +4,13 @@ Score Tracker - Real-time score tracking and performance analysis
 
 import json
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from pathlib import Path
 from collections import defaultdict, deque
 
 from .data_models import GameResult, HistoryEncoder
+from ..error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
+from ..error_handling.decorators import handle_errors, graceful_degradation
 
 
 class ScoreTracker:
@@ -16,6 +18,9 @@ class ScoreTracker:
     
     def __init__(self, history_file: str = "score_history.json"):
         self.history_file = Path(history_file)
+        
+        # Initialize error handler
+        self.error_handler = ErrorHandler()
         
         # Current state
         self.current_scores: Dict[str, float] = {}
@@ -49,6 +54,7 @@ class ScoreTracker:
         
         print(f"📊 ScoreTracker initialized with {len(self.game_results)} historical games")
     
+    @graceful_degradation(fallback_value=None, log_errors=True, component="score_update")
     def update_current_scores(self, player1_score: float, player2_score: float, 
                             player1_name: str = "Player1", player2_name: str = "Player2") -> None:
         """
@@ -68,8 +74,22 @@ class ScoreTracker:
             # This could be expanded to track multiple simultaneous games
             
         except Exception as e:
-            print(f"⚠️ Error updating current scores: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.HISTORY,
+                severity=ErrorSeverity.LOW,
+                component="ScoreTracker",
+                context={"operation": "update_current_scores", "player1": player1_name, "player2": player2_name}
+            )
     
+    @handle_errors(
+        category=ErrorCategory.HISTORY,
+        severity=ErrorSeverity.MEDIUM,
+        component="game_result_recording",
+        recovery_scenario="history_logging_failed",
+        max_retries=2,
+        suppress_errors=True
+    )
     def record_game_result(self, result: GameResult) -> None:
         """
         Record a completed game result
@@ -94,7 +114,13 @@ class ScoreTracker:
             print(f"📊 Recorded game result: {result.winner} won in {result.total_moves} moves")
             
         except Exception as e:
-            print(f"⚠️ Error recording game result: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.HISTORY,
+                severity=ErrorSeverity.MEDIUM,
+                component="ScoreTracker",
+                context={"operation": "record_game_result", "game_id": result.game_id, "winner": result.winner}
+            )
     
     def get_historical_trends(self, agent_name: str, timeframe: str = "all") -> List[Dict[str, Any]]:
         """

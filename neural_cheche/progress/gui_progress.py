@@ -6,12 +6,18 @@ from typing import Dict, List, Any
 import pygame
 from datetime import datetime
 
+from ..error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
+from ..error_handling.decorators import graceful_degradation
+
 
 class GUIProgress:
     """GUI progress tracking with visual indicators"""
 
     def __init__(self, visualization_manager):
         self.vis_manager = visualization_manager
+        
+        # Initialize error handler
+        self.error_handler = ErrorHandler()
 
         # Colors for progress bars and charts
         self.colors = {
@@ -50,7 +56,13 @@ class GUIProgress:
             self.font_small = pygame.font.SysFont("arial", 14)
         except Exception as e:
             # Fallback to default font
-            print(f"⚠️ Font loading failed: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.GUI,
+                severity=ErrorSeverity.LOW,
+                component="GUIProgress",
+                context={"operation": "font_initialization"}
+            )
             self.font_large = pygame.font.Font(None, 24)
             self.font_medium = pygame.font.Font(None, 18)
             self.font_small = pygame.font.Font(None, 14)
@@ -89,6 +101,7 @@ class GUIProgress:
         self.current_phase = phase
         self.phase_progress = progress
 
+    @graceful_degradation(fallback_value=None, log_errors=True, component="generation_progress_draw")
     def draw_generation_progress(self, screen: pygame.Surface, x: int, y: int) -> None:
         """
         Draw generation progress bar
@@ -139,7 +152,13 @@ class GUIProgress:
 
         except Exception as e:
             # Fallback text display
-            print(f"⚠️ Generation progress display error: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.GUI,
+                severity=ErrorSeverity.LOW,
+                component="GUIProgress",
+                context={"operation": "draw_generation_progress", "x": x, "y": y}
+            )
             error_text = (
                 f"Generation {self.current_generation}/{self.total_generations}"
             )
