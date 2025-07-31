@@ -21,7 +21,7 @@ from ..error_handling.decorators import handle_errors
 class LeagueManager:
     """Main orchestrator for the Neural CheChe training system"""
     
-    def __init__(self, config_file=None, config_manager=None):
+    def __init__(self, config_file=None, config_manager=None, config_dict=None):
         print("🚀 Initializing Neural CheChe League Manager...")
         
         # Configuration management
@@ -29,6 +29,10 @@ class LeagueManager:
             self.config_manager = config_manager
         elif config_file:
             self.config_manager = ConfigManager(config_file)
+        elif config_dict:
+            # Create a temporary config manager and override with provided config
+            self.config_manager = ConfigManager()
+            self._override_config_from_dict(config_dict)
         else:
             # Try to load default config file, fallback to defaults
             default_config_path = 'config/neural_cheche_config.json'
@@ -151,6 +155,21 @@ class LeagueManager:
             print(f"⚠️ Failed to initialize progress tracking: {e}")
             self.progress_manager = None
     
+    def _override_config_from_dict(self, config_dict):
+        """Override configuration manager settings with values from config dictionary"""
+        # Update core configuration
+        if hasattr(self.config_manager, '_core_config'):
+            for key, value in config_dict.items():
+                if key in self.config_manager._core_config:
+                    self.config_manager._core_config[key] = value
+        
+        # Update visualization settings if present
+        if hasattr(self.config_manager, 'gui') and hasattr(self.config_manager.gui, 'config'):
+            gui_keys = ['enable_visualization', 'window_width', 'window_height', 'square_size', 'move_delay']
+            for key in gui_keys:
+                if key in config_dict:
+                    setattr(self.config_manager.gui.config, key, config_dict[key])
+
     def _build_legacy_config(self):
         """Build legacy configuration dictionary from ConfigManager for backward compatibility"""
         config = {}
@@ -599,15 +618,55 @@ class LeagueManager:
         
         return self.alpha if alpha_score > beta_score else self.beta
     
+    @handle_errors(
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        component="save_progress",
+        recovery_scenario="file_not_found",
+        max_retries=2,
+        suppress_errors=True
+    )
     def _save_progress(self):
         """Save training progress"""
         print("💾 Saving progress...")
         
         try:
-            # Save models
-            self.champion.save_model(f"champion_gen_{self.generation}.pth")
-            self.alpha.save_model(f"alpha_gen_{self.generation}.pth")
-            self.beta.save_model(f"beta_gen_{self.generation}.pth")
+            # Save models with error handling for each
+            try:
+                self.champion.save_model(f"champion_gen_{self.generation}.pth")
+            except Exception as e:
+                if self.error_handler:
+                    self.error_handler.handle_error(
+                        error=e,
+                        category=ErrorCategory.FILE_IO,
+                        severity=ErrorSeverity.MEDIUM,
+                        component="LeagueManager",
+                        context={"operation": "save_champion_model", "generation": self.generation}
+                    )
+            
+            try:
+                self.alpha.save_model(f"alpha_gen_{self.generation}.pth")
+            except Exception as e:
+                if self.error_handler:
+                    self.error_handler.handle_error(
+                        error=e,
+                        category=ErrorCategory.FILE_IO,
+                        severity=ErrorSeverity.MEDIUM,
+                        component="LeagueManager",
+                        context={"operation": "save_alpha_model", "generation": self.generation}
+                    )
+            
+            try:
+                self.beta.save_model(f"beta_gen_{self.generation}.pth")
+            except Exception as e:
+                if self.error_handler:
+                    self.error_handler.handle_error(
+                        error=e,
+                        category=ErrorCategory.FILE_IO,
+                        severity=ErrorSeverity.MEDIUM,
+                        component="LeagueManager",
+                        context={"operation": "save_beta_model", "generation": self.generation}
+                    )
             
             # Save training statistics
             stats = {
@@ -628,7 +687,16 @@ class LeagueManager:
             print("✅ Progress saved")
             
         except Exception as e:
-            print(f"❌ Error saving progress: {e}")
+            if self.error_handler:
+                self.error_handler.handle_error(
+                    error=e,
+                    category=ErrorCategory.FILE_IO,
+                    severity=ErrorSeverity.MEDIUM,
+                    component="LeagueManager",
+                    context={"operation": "save_progress", "generation": self.generation}
+                )
+            else:
+                print(f"❌ Error saving progress: {e}")
     
     def _display_generation_stats(self):
         """Display statistics for the current generation"""
@@ -716,6 +784,13 @@ class LeagueManager:
         }
     
     # Progress-enhanced phase methods
+    @handle_errors(
+        category=ErrorCategory.TRAINING,
+        severity=ErrorSeverity.HIGH,
+        component="game_generation",
+        recovery_scenario="training_step_failed",
+        max_retries=2
+    )
     def _run_game_generation_with_progress(self):
         """Phase 1: Generate games for training data with progress tracking"""
         phase_name = "Game Generation"
@@ -738,22 +813,45 @@ class LeagueManager:
         total_games = len(games_config)
         
         for i, (agent1, agent2, game_type, description) in enumerate(games_config):
-            print(f"  🎯 {description}")
-            
-            # Update progress
-            if self.progress_manager:
-                progress = (i + 0.5) / total_games
-                self.progress_manager.update_phase_progress(phase_name, progress)
-            
-            experiences, reward = self.competition.play_match(
-                agent1, agent2, game_type,
-                visualize=self.config['enable_visualization'],
-                replay_buffer=self.replay_buffer,
-                generation=self.generation
-            )
-            
-            total_experiences += len(experiences)
-            print(f"    📊 Generated {len(experiences)} experiences, reward: {reward:.3f}")
+            try:
+                print(f"  🎯 {description}")
+                
+                # Update progress
+                if self.progress_manager:
+                    progress = (i + 0.5) / total_games
+                    self.progress_manager.update_phase_progress(phase_name, progress)
+                
+                experiences, reward = self.competition.play_match(
+                    agent1, agent2, game_type,
+                    visualize=self.config['enable_visualization'],
+                    replay_buffer=self.replay_buffer,
+                    generation=self.generation
+                )
+                
+                total_experiences += len(experiences)
+                print(f"    📊 Generated {len(experiences)} experiences, reward: {reward:.3f}")
+                
+            except Exception as e:
+                if self.error_handler:
+                    self.error_handler.handle_error(
+                        error=e,
+                        category=ErrorCategory.TRAINING,
+                        severity=ErrorSeverity.HIGH,
+                        component="LeagueManager",
+                        context={
+                            "operation": "game_generation",
+                            "game_type": game_type,
+                            "description": description,
+                            "game_index": i
+                        }
+                    )
+                
+                # Continue with next game if this one fails
+                if self.config_manager.error_handling.should_continue_on_failure():
+                    print(f"⚠️ Skipping failed game: {description}")
+                    continue
+                else:
+                    raise
         
         # Complete phase
         if self.progress_manager:
@@ -761,6 +859,13 @@ class LeagueManager:
         
         print(f"✅ Game generation complete. Total experiences: {total_experiences}")
     
+    @handle_errors(
+        category=ErrorCategory.TRAINING,
+        severity=ErrorSeverity.HIGH,
+        component="training_phase",
+        recovery_scenario="training_step_failed",
+        max_retries=2
+    )
     def _run_training_phase_with_progress(self):
         """Phase 2: AI Strategy Discussion (Training) with progress tracking"""
         phase_name = "AI Training"
@@ -828,6 +933,13 @@ class LeagueManager:
         print("✅ Training phase complete")
         return training_results
     
+    @handle_errors(
+        category=ErrorCategory.TRAINING,
+        severity=ErrorSeverity.MEDIUM,
+        component="challenger_phase",
+        recovery_scenario="training_step_failed",
+        max_retries=1
+    )
     def _run_challenger_phase_with_progress(self):
         """Phase 3: Challenger System with progress tracking"""
         phase_name = "Challenger System"
@@ -883,6 +995,13 @@ class LeagueManager:
         if self.progress_manager:
             self.progress_manager.update_phase_progress(phase_name, 1.0)
     
+    @handle_errors(
+        category=ErrorCategory.TRAINING,
+        severity=ErrorSeverity.MEDIUM,
+        component="wildcard_phase",
+        recovery_scenario="training_step_failed",
+        max_retries=1
+    )
     def _run_wildcard_phase_with_progress(self):
         """Phase 4: Wildcard Challenge with progress tracking"""
         phase_name = "Wildcard Challenge"
@@ -923,6 +1042,14 @@ class LeagueManager:
         if self.progress_manager:
             self.progress_manager.update_phase_progress(phase_name, 1.0)
     
+    @handle_errors(
+        category=ErrorCategory.PROGRESS,
+        severity=ErrorSeverity.LOW,
+        component="generation_progress_update",
+        recovery_scenario="progress_display_failed",
+        max_retries=1,
+        suppress_errors=True
+    )
     def _update_generation_progress(self, generation: int):
         """Update overall generation progress with metrics"""
         if not self.progress_manager:
@@ -948,7 +1075,16 @@ class LeagueManager:
                 self.progress_manager.display_generational_growth(historical_data)
             
         except Exception as e:
-            print(f"⚠️ Error updating generation progress: {e}")
+            if self.error_handler:
+                self.error_handler.handle_error(
+                    error=e,
+                    category=ErrorCategory.PROGRESS,
+                    severity=ErrorSeverity.LOW,
+                    component="LeagueManager",
+                    context={"operation": "update_generation_progress", "generation": generation}
+                )
+            else:
+                print(f"⚠️ Error updating generation progress: {e}")
     
     def _calculate_current_win_rate(self) -> float:
         """Calculate current overall win rate"""

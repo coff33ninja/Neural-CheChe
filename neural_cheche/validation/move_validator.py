@@ -10,6 +10,8 @@ from typing import Any, Dict, List
 
 from .data_models import ValidationResult, ValidationViolation
 from .piece_tracker import PieceTracker
+from ..error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
+from ..error_handling.decorators import handle_errors, graceful_degradation
 
 
 class MoveValidator:
@@ -22,9 +24,29 @@ class MoveValidator:
         self.violation_log_path = f"logs/violations_{game_type}.json"
         self.violations_count = 0
 
-        # Create logs directory if it doesn't exist
-        os.makedirs("logs", exist_ok=True)
+        # Initialize error handler
+        self.error_handler = ErrorHandler()
 
+        # Create logs directory if it doesn't exist
+        try:
+            os.makedirs("logs", exist_ok=True)
+        except Exception as e:
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.MEDIUM,
+                component=f"MoveValidator_{game_type}",
+                context={"operation": "create_logs_directory"}
+            )
+
+    @handle_errors(
+        category=ErrorCategory.VALIDATION,
+        severity=ErrorSeverity.HIGH,
+        component="move_validation",
+        recovery_scenario="validation_timeout",
+        max_retries=2,
+        fallback_value=None
+    )
     def validate_move(
         self,
         board_before: Any,
@@ -82,6 +104,20 @@ class MoveValidator:
                 self.log_violation(violation)
             return result
         except Exception as e:
+            # Handle validation errors with comprehensive error handling
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.VALIDATION,
+                severity=ErrorSeverity.HIGH,
+                component=f"MoveValidator_{self.game_type}",
+                context={
+                    "agent_name": agent_name,
+                    "generation": generation,
+                    "move_number": move_number,
+                    "operation": "validate_move"
+                }
+            )
+            
             error_violation = ValidationViolation(
                 violation_type="VALIDATION_ERROR",
                 description=f"Validation system error: {str(e)}",
@@ -107,6 +143,7 @@ class MoveValidator:
                 move_description=str(move),
             )
 
+    @graceful_degradation(fallback_value=False, log_errors=True, component="piece_integrity_check")
     def check_piece_integrity(self, board_before: Any, board_after: Any) -> bool:
         """
         Check if piece integrity is maintained between board states.
@@ -134,9 +171,16 @@ class MoveValidator:
             return comparison.is_valid_transition
 
         except Exception as e:
-            print(f"Error checking piece integrity: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.VALIDATION,
+                severity=ErrorSeverity.MEDIUM,
+                component=f"MoveValidator_{self.game_type}",
+                context={"operation": "check_piece_integrity"}
+            )
             return False
 
+    @graceful_degradation(fallback_value=[], log_errors=True, component="magical_pieces_detection")
     def detect_magical_pieces(self, board_before: Any, board_after: Any) -> List[str]:
         """
         Identify unauthorized piece generation (magical pieces).
@@ -165,9 +209,23 @@ class MoveValidator:
             return magical_pieces
 
         except Exception as e:
-            print(f"Error detecting magical pieces: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.VALIDATION,
+                severity=ErrorSeverity.MEDIUM,
+                component=f"MoveValidator_{self.game_type}",
+                context={"operation": "detect_magical_pieces"}
+            )
             return []
 
+    @handle_errors(
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        component="violation_logging",
+        recovery_scenario="file_not_found",
+        max_retries=2,
+        suppress_errors=True
+    )
     def log_violation(self, violation: ValidationViolation) -> None:
         """
         Log a validation violation to file
@@ -193,7 +251,17 @@ class MoveValidator:
             print(f"⚠️ Validation violation logged: {violation.description}")
 
         except Exception as e:
-            print(f"Error logging violation: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.MEDIUM,
+                component=f"MoveValidator_{self.game_type}",
+                context={
+                    "operation": "log_violation",
+                    "violation_type": violation.violation_type,
+                    "file_path": self.violation_log_path
+                }
+            )
 
     def get_violation_statistics(self) -> Dict[str, Any]:
         """Get statistics about violations"""

@@ -116,7 +116,7 @@ Examples:
     
     try:
         # Initialize and run training
-        league_manager = LeagueManager(config.to_dict())
+        league_manager = LeagueManager(config_dict=config.to_dict())
         
         # Load checkpoint if requested
         if args.load_checkpoint:

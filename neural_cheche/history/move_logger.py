@@ -3,13 +3,14 @@ Move Logger - Comprehensive JSON logging of AI moves and decisions
 """
 
 import json
-import os
 import uuid
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
 from .data_models import MoveData, GameInfo, GameResult, HistoryEncoder
+from ..error_handling import ErrorHandler, ErrorCategory, ErrorSeverity
+from ..error_handling.decorators import handle_errors
 
 
 class MoveLogger:
@@ -20,6 +21,9 @@ class MoveLogger:
         self.current_games: Dict[str, GameInfo] = {}
         self.current_moves: Dict[str, List[MoveData]] = {}
         
+        # Initialize error handler
+        self.error_handler = ErrorHandler()
+        
         # Create directory structure
         self._create_directory_structure()
         
@@ -29,6 +33,13 @@ class MoveLogger:
         
         print(f"📝 MoveLogger initialized with directory: {self.backup_directory}")
     
+    @handle_errors(
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        component="directory_creation",
+        recovery_scenario="file_not_found",
+        max_retries=2
+    )
     def _create_directory_structure(self) -> None:
         """Create the backup directory structure"""
         try:
@@ -42,8 +53,22 @@ class MoveLogger:
             print(f"📁 Directory structure created at {self.backup_directory}")
             
         except Exception as e:
-            print(f"⚠️ Failed to create directory structure: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.MEDIUM,
+                component="MoveLogger",
+                context={"operation": "create_directory_structure", "directory": str(self.backup_directory)}
+            )
     
+    @handle_errors(
+        category=ErrorCategory.HISTORY,
+        severity=ErrorSeverity.MEDIUM,
+        component="game_log_start",
+        recovery_scenario="history_logging_failed",
+        max_retries=2,
+        fallback_value="error"
+    )
     def start_game_log(self, game_info: GameInfo) -> str:
         """
         Start logging a new game
@@ -79,9 +104,23 @@ class MoveLogger:
             return game_id
             
         except Exception as e:
-            print(f"⚠️ Failed to start game log: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.HISTORY,
+                severity=ErrorSeverity.MEDIUM,
+                component="MoveLogger",
+                context={"operation": "start_game_log", "game_type": game_info.game_type}
+            )
             return game_info.game_id or "error"
     
+    @handle_errors(
+        category=ErrorCategory.HISTORY,
+        severity=ErrorSeverity.LOW,
+        component="move_logging",
+        recovery_scenario="history_logging_failed",
+        max_retries=1,
+        suppress_errors=True
+    )
     def log_move(self, move_data: MoveData) -> None:
         """
         Log a single move
@@ -120,8 +159,26 @@ class MoveLogger:
                 print(f"📝 Logged move {move_data.move_number} for game {game_id[:8]}")
             
         except Exception as e:
-            print(f"⚠️ Failed to log move: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.HISTORY,
+                severity=ErrorSeverity.LOW,
+                component="MoveLogger",
+                context={
+                    "operation": "log_move",
+                    "game_id": move_data.game_id,
+                    "move_number": move_data.move_number
+                }
+            )
     
+    @handle_errors(
+        category=ErrorCategory.HISTORY,
+        severity=ErrorSeverity.MEDIUM,
+        component="game_log_end",
+        recovery_scenario="history_logging_failed",
+        max_retries=2,
+        suppress_errors=True
+    )
     def end_game_log(self, game_id: str, result: GameResult) -> None:
         """
         End logging for a game and finalize the log
@@ -169,8 +226,22 @@ class MoveLogger:
             print(f"🏁 Completed logging for game {game_id} - {result.winner} won in {result.total_moves} moves")
             
         except Exception as e:
-            print(f"⚠️ Failed to end game log: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.HISTORY,
+                severity=ErrorSeverity.MEDIUM,
+                component="MoveLogger",
+                context={"operation": "end_game_log", "game_id": game_id, "winner": result.winner}
+            )
     
+    @handle_errors(
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        component="backup_creation",
+        recovery_scenario="file_not_found",
+        max_retries=2,
+        fallback_value=""
+    )
     def create_backup(self, game_id: str) -> str:
         """
         Create a backup of a specific game
@@ -203,7 +274,13 @@ class MoveLogger:
             return str(backup_file)
             
         except Exception as e:
-            print(f"⚠️ Failed to create backup: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.MEDIUM,
+                component="MoveLogger",
+                context={"operation": "create_backup", "game_id": game_id}
+            )
             return ""
     
     def get_game_history(self, game_id: str) -> Optional[Dict[str, Any]]:
@@ -226,7 +303,13 @@ class MoveLogger:
             return None
             
         except Exception as e:
-            print(f"⚠️ Failed to get game history: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.LOW,
+                component="MoveLogger",
+                context={"operation": "get_game_history", "game_id": game_id}
+            )
             return None
     
     def get_recent_games(self, limit: int = 10) -> List[Dict[str, Any]]:
@@ -258,7 +341,13 @@ class MoveLogger:
             return recent_games
             
         except Exception as e:
-            print(f"⚠️ Failed to get recent games: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.LOW,
+                component="MoveLogger",
+                context={"operation": "get_recent_games", "limit": limit}
+            )
             return []
     
     def get_statistics(self) -> Dict[str, Any]:
@@ -277,7 +366,13 @@ class MoveLogger:
             }
             
         except Exception as e:
-            print(f"⚠️ Error getting statistics: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.SYSTEM,
+                severity=ErrorSeverity.LOW,
+                component="MoveLogger",
+                context={"operation": "get_statistics"}
+            )
             return {"error": str(e)}
     
     def _get_directory_size(self) -> int:
@@ -314,7 +409,13 @@ class MoveLogger:
             print(f"🧹 Cleaned up {cleaned_count} old backup files")
             
         except Exception as e:
-            print(f"⚠️ Error during cleanup: {e}")
+            self.error_handler.handle_error(
+                error=e,
+                category=ErrorCategory.FILE_IO,
+                severity=ErrorSeverity.LOW,
+                component="MoveLogger",
+                context={"operation": "cleanup_old_files", "days_to_keep": days_to_keep}
+            )
     
     def __enter__(self):
         """Context manager entry"""
