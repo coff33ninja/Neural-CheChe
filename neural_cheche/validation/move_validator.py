@@ -6,9 +6,9 @@ import hashlib
 import json
 import os
 from datetime import datetime
-from typing import Any, List, Dict, Optional
+from typing import Any, Dict
 
-from .data_models import ValidationResult, ValidationViolation, PieceComparison
+from .data_models import ValidationResult, ValidationViolation
 from .piece_tracker import PieceTracker
 
 
@@ -29,50 +29,25 @@ class MoveValidator:
                      agent_name: str = "Unknown", generation: int = 0, 
                      move_number: int = 0) -> ValidationResult:
         """
-        Validate that a move is legal and doesn't create magical pieces
-        
-        Args:
-            board_before: Board state before the move
-            board_after: Board state after the move
-            move: The move that was made
-            agent_name: Name of the AI agent making the move
-            generation: Current training generation
-            move_number: Move number in the game
-            
-        Returns:
-            ValidationResult with validation details
+        Validate that a move is legal using PieceComparison from PieceTracker.
         """
         timestamp = datetime.now()
-        violations = []
-        magical_pieces = []
-        
-        # Generate board hashes for tracking
         board_hash_before = self._generate_board_hash(board_before)
         board_hash_after = self._generate_board_hash(board_after)
-        
         try:
-            # Check piece integrity
-            if not self.check_piece_integrity(board_before, board_after):
-                violations.append("Piece integrity violation detected")
-            
-            # Detect magical pieces
-            detected_magical = self.detect_magical_pieces(board_before, board_after)
-            if detected_magical:
-                magical_pieces.extend(detected_magical)
-                violations.append(f"Magical pieces detected: {', '.join(detected_magical)}")
-            
-            # Validate piece changes are legal for this game type
-            piece_comparison = self.piece_tracker.compare_states(
-                self.piece_tracker.track_board_state(board_before),
-                self.piece_tracker.track_board_state(board_after)
-            )
-            
-            if not self.piece_tracker.validate_piece_changes(piece_comparison, move):
-                violations.append("Illegal piece transition detected")
-            
-            # Create validation result
-            is_valid = len(violations) == 0 and len(magical_pieces) == 0
-            
+            before_state = self.piece_tracker.track_board_state(board_before)
+            after_state = self.piece_tracker.track_board_state(board_after)
+            comparison = self.piece_tracker.compare_states(before_state, after_state)
+
+            violations = list(comparison.violation_reasons)
+            magical_pieces = []
+            # Use PieceComparison to detect magical pieces
+            for piece_type, count in comparison.pieces_added.items():
+                if count > 0 and not self.piece_tracker._is_legal_piece_creation(piece_type, count, before_state, after_state):
+                    magical_pieces.append(f"{piece_type} (+{count})")
+
+            is_valid = comparison.is_valid_transition and not magical_pieces
+
             result = ValidationResult(
                 is_valid=is_valid,
                 violations=violations,
@@ -82,8 +57,7 @@ class MoveValidator:
                 board_hash_after=board_hash_after,
                 move_description=str(move)
             )
-            
-            # Log violations if any
+
             if not is_valid and self.log_violations:
                 violation = ValidationViolation(
                     violation_type="ILLEGAL_MOVE",
@@ -98,11 +72,8 @@ class MoveValidator:
                     timestamp=timestamp
                 )
                 self.log_violation(violation)
-            
             return result
-            
         except Exception as e:
-            # Handle validation errors gracefully
             error_violation = ValidationViolation(
                 violation_type="VALIDATION_ERROR",
                 description=f"Validation system error: {str(e)}",
@@ -116,10 +87,8 @@ class MoveValidator:
                 timestamp=timestamp,
                 severity="ERROR"
             )
-            
             if self.log_violations:
                 self.log_violation(error_violation)
-            
             return ValidationResult(
                 is_valid=False,
                 violations=[f"Validation error: {str(e)}"],
@@ -130,71 +99,7 @@ class MoveValidator:
                 move_description=str(move)
             )
     
-    def check_piece_integrity(self, board_before: Any, board_after: Any) -> bool:
-        """
-        Check that no pieces were illegally created or destroyed
-        
-        Args:
-            board_before: Board state before move
-            board_after: Board state after move
-            
-        Returns:
-            True if piece integrity is maintained
-        """
-        try:
-            before_state = self.piece_tracker.track_board_state(board_before)
-            after_state = self.piece_tracker.track_board_state(board_after)
-            
-            comparison = self.piece_tracker.compare_states(before_state, after_state)
-            
-            # Check for illegal piece creation (magical pieces)
-            net_change = comparison.get_net_piece_change()
-            
-            # In normal gameplay, pieces can only be removed (captured) or moved
-            # New pieces should never appear except through promotion
-            for piece_type, change in net_change.items():
-                if change > 0:  # Positive change means pieces were added
-                    # Check if this is a legal promotion (pawn to queen, etc.)
-                    if not self._is_legal_promotion(piece_type, board_before, board_after):
-                        return False
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error checking piece integrity: {e}")
-            return False
-    
-    def detect_magical_pieces(self, board_before: Any, board_after: Any) -> List[str]:
-        """
-        Detect pieces that were magically created
-        
-        Args:
-            board_before: Board state before move
-            board_after: Board state after move
-            
-        Returns:
-            List of magical piece descriptions
-        """
-        magical_pieces = []
-        
-        try:
-            before_state = self.piece_tracker.track_board_state(board_before)
-            after_state = self.piece_tracker.track_board_state(board_after)
-            
-            comparison = self.piece_tracker.compare_states(before_state, after_state)
-            net_change = comparison.get_net_piece_change()
-            
-            for piece_type, change in net_change.items():
-                if change > 0:  # Pieces were added
-                    # Check if this is a legal addition (promotion, etc.)
-                    if not self._is_legal_piece_addition(piece_type, change, board_before, board_after):
-                        magical_pieces.append(f"{piece_type} (+{change})")
-            
-            return magical_pieces
-            
-        except Exception as e:
-            print(f"Error detecting magical pieces: {e}")
-            return [f"Detection error: {str(e)}"]
+    # check_piece_integrity and detect_magical_pieces are now handled by PieceComparison logic in validate_move
     
     def log_violation(self, violation: ValidationViolation) -> None:
         """
