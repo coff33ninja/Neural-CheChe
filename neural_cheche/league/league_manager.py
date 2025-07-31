@@ -3,6 +3,7 @@ Main league management system - orchestrates the entire training process
 """
 
 import json
+import os
 
 from .agents import ChampionAgent, TrainingAgent, WildcardAgent
 from .competition import Competition
@@ -10,16 +11,36 @@ from ..core import SharedReplayBuffer
 from ..utils import safe_device, get_gpu_info, get_gpu_memory_info, clear_gpu_memory
 from ..utils import VisualizationManager
 from ..progress import ProgressManager
+from ..config import ConfigManager
+from ..validation import MoveValidator
+from ..history import MoveLogger, BackupManager
 
 
 class LeagueManager:
     """Main orchestrator for the Neural CheChe training system"""
     
-    def __init__(self, config=None):
+    def __init__(self, config_file=None, config_manager=None):
         print("🚀 Initializing Neural CheChe League Manager...")
         
-        # Configuration
-        self.config = config or self._get_default_config()
+        # Configuration management
+        if config_manager:
+            self.config_manager = config_manager
+        elif config_file:
+            self.config_manager = ConfigManager(config_file)
+        else:
+            # Try to load default config file, fallback to defaults
+            default_config_path = 'config/neural_cheche_config.json'
+            if os.path.exists(default_config_path):
+                self.config_manager = ConfigManager(default_config_path)
+            else:
+                self.config_manager = ConfigManager()
+        
+        # Validate configuration
+        if not self.config_manager.validate_all_configs():
+            print("⚠️ Configuration validation failed, using defaults where possible")
+        
+        # Legacy config for backward compatibility
+        self.config = self._build_legacy_config()
         
         # Device setup
         self.device = safe_device()
@@ -47,6 +68,11 @@ class LeagueManager:
         # Progress tracking
         self.progress_manager = None
         self._initialize_progress_tracking()
+        
+        # Initialize new enhancement systems
+        self._initialize_validation_system()
+        self._initialize_history_system()
+        self._initialize_error_handling()
         
         print("✅ League Manager initialized successfully")
     
@@ -114,6 +140,165 @@ class LeagueManager:
         except Exception as e:
             print(f"⚠️ Failed to initialize progress tracking: {e}")
             self.progress_manager = None
+    
+    def _build_legacy_config(self):
+        """Build legacy configuration dictionary from ConfigManager for backward compatibility"""
+        config = {}
+        
+        # Core configuration
+        config.update({
+            'learning_rate': self.config_manager.get_core_config('learning_rate', 0.001),
+            'buffer_capacity': self.config_manager.get_core_config('buffer_capacity', 100000),
+            'batch_size': self.config_manager.get_core_config('batch_size', 64),
+            'training_steps_per_generation': self.config_manager.get_core_config('training_steps_per_generation', 50),
+            'games_per_generation': self.config_manager.get_core_config('games_per_generation', 6),
+            'challenger_interval': self.config_manager.get_core_config('challenger_interval', 5),
+            'wildcard_interval': self.config_manager.get_core_config('wildcard_interval', 3),
+            'challenger_threshold': self.config_manager.get_core_config('challenger_threshold', 0.55),
+            'move_delay': self.config_manager.get_core_config('move_delay', 0.1),
+            'max_moves_per_game': self.config_manager.get_core_config('max_moves_per_game', 200),
+            'save_interval': self.config_manager.get_core_config('save_interval', 10),
+        })
+        
+        # GUI configuration
+        config.update({
+            'enable_visualization': self.config_manager.gui.get('enable_visualization', True),
+        })
+        
+        # Progress configuration
+        config.update({
+            'enable_cli_progress': self.config_manager.progress.get('enable_cli_progress', True),
+            'enable_gui_progress': self.config_manager.progress.get('enable_gui_progress', True),
+            'progress_update_frequency': self.config_manager.progress.get('update_frequency', 0.1),
+            'show_detailed_metrics': self.config_manager.progress.get('show_detailed_metrics', True),
+        })
+        
+        return config
+    
+    def _initialize_validation_system(self):
+        """Initialize move validation system"""
+        try:
+            if self.config_manager.validation.is_validation_enabled():
+                # Initialize validators for different game types
+                self.chess_validator = MoveValidator("chess", 
+                    log_violations=self.config_manager.validation.get('log_violations', True))
+                self.checkers_validator = MoveValidator("checkers", 
+                    log_violations=self.config_manager.validation.get('log_violations', True))
+                
+                # Add validation to competition
+                self.competition.set_validators({
+                    'chess': self.chess_validator,
+                    'checkers': self.checkers_validator
+                })
+                
+                print("🛡️ Move validation system initialized")
+            else:
+                self.chess_validator = None
+                self.checkers_validator = None
+                print("⚠️ Move validation disabled by configuration")
+                
+        except Exception as e:
+            print(f"⚠️ Failed to initialize validation system: {e}")
+            self.chess_validator = None
+            self.checkers_validator = None
+            if not self.config_manager.error_handling.should_continue_on_failure():
+                raise
+    
+    def _initialize_history_system(self):
+        """Initialize move logging and backup system"""
+        try:
+            if self.config_manager.history.is_logging_enabled():
+                # Initialize move logger
+                self.move_logger = MoveLogger(
+                    backup_directory=self.config_manager.history.get('backup_directory', 'logs/moves')
+                )
+                
+                # Initialize backup manager
+                self.backup_manager = BackupManager(
+                    base_directory=self.config_manager.history.get('backup_directory', 'backups')
+                )
+                # Set compression after initialization
+                self.backup_manager.compress_backups = self.config_manager.history.get('compress_backups', True)
+                
+                # Add history tracking to competition
+                self.competition.set_history_managers(self.move_logger, self.backup_manager)
+                
+                print("📝 History and backup system initialized")
+            else:
+                self.move_logger = None
+                self.backup_manager = None
+                print("⚠️ History logging disabled by configuration")
+                
+        except Exception as e:
+            print(f"⚠️ Failed to initialize history system: {e}")
+            self.move_logger = None
+            self.backup_manager = None
+            if not self.config_manager.error_handling.should_continue_on_failure():
+                raise
+    
+    def _initialize_error_handling(self):
+        """Initialize unified error handling system"""
+        try:
+            # Set error handling configuration for all components
+            error_config = {
+                'graceful_degradation': self.config_manager.error_handling.should_use_graceful_degradation(),
+                'retry_on_failure': self.config_manager.error_handling.should_retry_on_failure(),
+                'max_retries': self.config_manager.error_handling.get('max_retry_attempts', 3),
+                'continue_on_failure': self.config_manager.error_handling.should_continue_on_failure(),
+                'log_errors': self.config_manager.error_handling.get('log_errors', True)
+            }
+            
+            # Apply error handling to competition
+            if hasattr(self.competition, 'set_error_handling'):
+                self.competition.set_error_handling(error_config)
+            
+            # Apply error handling to progress manager
+            if self.progress_manager and hasattr(self.progress_manager, 'set_error_handling'):
+                self.progress_manager.set_error_handling(error_config)
+            
+            print("🔧 Unified error handling initialized")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to initialize error handling: {e}")
+            if not self.config_manager.error_handling.should_continue_on_failure():
+                raise
+    
+    def get_system_status(self):
+        """Get status of all enhancement systems"""
+        return {
+            'validation': {
+                'enabled': self.config_manager.validation.is_validation_enabled(),
+                'chess_validator': self.chess_validator is not None,
+                'checkers_validator': self.checkers_validator is not None
+            },
+            'progress': {
+                'enabled': self.config_manager.progress.is_progress_enabled(),
+                'cli_enabled': self.config_manager.progress.should_show_cli_progress(),
+                'gui_enabled': self.config_manager.progress.should_show_gui_progress(),
+                'manager_initialized': self.progress_manager is not None
+            },
+            'history': {
+                'enabled': self.config_manager.history.is_logging_enabled(),
+                'move_logger': self.move_logger is not None,
+                'backup_manager': self.backup_manager is not None
+            },
+            'gui': {
+                'enabled': self.config_manager.gui.is_visualization_enabled(),
+                'visualization_manager': self.visualization_manager is not None
+            },
+            'error_handling': {
+                'graceful_degradation': self.config_manager.error_handling.should_use_graceful_degradation(),
+                'continue_on_failure': self.config_manager.error_handling.should_continue_on_failure()
+            }
+        }
+    
+    def save_configuration(self, filepath=None):
+        """Save current configuration to file"""
+        try:
+            self.config_manager.save_to_file(filepath)
+            print(f"✅ Configuration saved successfully")
+        except Exception as e:
+            print(f"❌ Failed to save configuration: {e}")
     
     def run_training(self, num_generations=100):
         """Run the main training loop"""

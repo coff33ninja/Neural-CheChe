@@ -461,9 +461,12 @@ class Competition:
             'violations_by_game_type': {}
         }
         
-        # Initialize history tracking components
+        # Initialize validation and history tracking components
+        self.validators = {}
         self.move_logger = None
+        self.backup_manager = None
         self.score_tracker = None
+        self.error_handling_config = {}
         
         if self.enable_history:
             try:
@@ -473,6 +476,22 @@ class Competition:
             except Exception as e:
                 print(f"⚠️ Failed to initialize history tracking: {e}")
                 self.enable_history = False
+    
+    def set_validators(self, validators_dict):
+        """Set move validators for different game types"""
+        self.validators = validators_dict
+        print(f"🛡️ Validators set for game types: {list(validators_dict.keys())}")
+    
+    def set_history_managers(self, move_logger, backup_manager):
+        """Set history managers for move logging and backups"""
+        self.move_logger = move_logger
+        self.backup_manager = backup_manager
+        print("📝 History managers updated")
+    
+    def set_error_handling(self, error_config):
+        """Set error handling configuration"""
+        self.error_handling_config = error_config
+        print("🔧 Error handling configuration updated")
     
     def play_match(self, agent1, agent2, game_type, visualize=False, replay_buffer=None, generation=0):
         """Play a single match between two agents"""
