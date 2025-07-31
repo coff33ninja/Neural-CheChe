@@ -1,0 +1,38 @@
+{
+  "_description": "GUI-Focused Configuration - Enhanced visualization and user experience",
+  "_use_case": "Interactive training with rich visual feedback",
+  "core": {
+    "move_delay": 0.5,
+    "games_per_generation": 4
+  },
+  "validation": {
+    "enable_move_validation": true,
+    "log_violations": true
+  },
+  "progress": {
+    "enable_cli_progress": false,
+    "enable_gui_progress": true,
+    "update_frequency": 0.1,
+    "show_detailed_metrics": true,
+    "display_growth_charts": true
+  },
+  "history": {
+    "enable_move_logging": true,
+    "backup_frequency": "per_game"
+  },
+  "gui": {
+    "enable_visualization": true,
+    "show_captured_pieces": true,
+    "show_move_hints": true,
+    "show_coordinates": true,
+    "highlight_last_move": true,
+    "animation_speed": 1.0,
+    "theme": "default",
+    "board_size": 500,
+    "piece_size": 50
+  },
+  "error_handling": {
+    "notify_user_on_error": true,
+    "continue_on_component_failure": true
+  }
+}

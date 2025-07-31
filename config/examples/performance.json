@@ -1,0 +1,33 @@
+{
+  "_description": "Performance Configuration - Maximum training speed",
+  "_use_case": "High-performance training with minimal overhead",
+  "core": {
+    "learning_rate": 0.001,
+    "games_per_generation": 12,
+    "training_steps_per_generation": 200,
+    "move_delay": 0.0
+  },
+  "validation": {
+    "enable_move_validation": true,
+    "detailed_violation_logging": false,
+    "validation_timeout": 1.0
+  },
+  "progress": {
+    "enable_cli_progress": true,
+    "enable_gui_progress": false,
+    "update_frequency": 1.0,
+    "show_detailed_metrics": false
+  },
+  "history": {
+    "enable_move_logging": false
+  },
+  "gui": {
+    "enable_visualization": false
+  },
+  "error_handling": {
+    "detailed_error_logging": false,
+    "notify_user_on_error": false,
+    "continue_on_component_failure": true,
+    "max_retry_attempts": 3
+  }
+}

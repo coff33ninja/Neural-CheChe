@@ -1,0 +1,45 @@
+{
+  "_description": "Production Configuration - Optimized for performance and stability",
+  "_use_case": "Production training with optimal performance",
+  "core": {
+    "learning_rate": 0.001,
+    "games_per_generation": 8,
+    "training_steps_per_generation": 100,
+    "save_interval": 20,
+    "move_delay": 0.01
+  },
+  "validation": {
+    "enable_move_validation": true,
+    "strict_piece_checking": true,
+    "log_violations": true,
+    "detailed_violation_logging": false,
+    "validation_timeout": 2.0
+  },
+  "progress": {
+    "enable_cli_progress": true,
+    "enable_gui_progress": false,
+    "update_frequency": 0.5,
+    "show_detailed_metrics": false,
+    "display_growth_charts": false
+  },
+  "history": {
+    "enable_move_logging": true,
+    "backup_frequency": "per_generation",
+    "detailed_logging": false,
+    "log_board_states": false,
+    "log_policy_distributions": false,
+    "log_evaluation_scores": true,
+    "compress_backups": true,
+    "retention_days": 90
+  },
+  "gui": {
+    "enable_visualization": false
+  },
+  "error_handling": {
+    "detailed_error_logging": false,
+    "notify_user_on_error": false,
+    "continue_on_component_failure": true,
+    "max_retry_attempts": 5,
+    "auto_recovery_enabled": true
+  }
+}

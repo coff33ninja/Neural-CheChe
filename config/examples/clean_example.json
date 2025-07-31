@@ -1,0 +1,109 @@
+{
+  "core": {
+    "batch_size": 64,
+    "buffer_capacity": 100000,
+    "challenger_interval": 5,
+    "challenger_threshold": 0.55,
+    "device": "auto",
+    "games_per_generation": 6,
+    "learning_rate": 0.001,
+    "max_moves_per_game": 200,
+    "model_architecture": "default",
+    "move_delay": 0.1,
+    "random_seed": null,
+    "save_interval": 10,
+    "training_steps_per_generation": 50,
+    "wildcard_interval": 3
+  },
+  "error_handling": {
+    "auto_recovery_enabled": true,
+    "continue_on_component_failure": true,
+    "crash_dump_enabled": true,
+    "detailed_error_logging": true,
+    "error_log_path": "logs/errors.log",
+    "error_reporting_enabled": false,
+    "exponential_backoff": true,
+    "fallback_mode_enabled": true,
+    "graceful_degradation": true,
+    "log_errors": true,
+    "max_retry_attempts": 3,
+    "memory_cleanup_on_error": true,
+    "notify_user_on_error": true,
+    "retry_delay": 1.0,
+    "retry_failed_operations": true
+  },
+  "gui": {
+    "adaptive_layout": true,
+    "animation_speed": 1.0,
+    "auto_resize_elements": true,
+    "board_size": 400,
+    "default_window_size": [
+      1200,
+      800
+    ],
+    "enable_sound": false,
+    "enable_visualization": true,
+    "font_size": 12,
+    "fps_limit": 60,
+    "fullscreen_mode": false,
+    "highlight_last_move": true,
+    "maximum_window_size": [
+      1920,
+      1080
+    ],
+    "minimum_window_size": [
+      800,
+      600
+    ],
+    "piece_size": 40,
+    "progress_bar_style": "modern",
+    "show_captured_pieces": true,
+    "show_coordinates": true,
+    "show_move_hints": true,
+    "theme": "default",
+    "vsync_enabled": true
+  },
+  "history": {
+    "auto_cleanup_enabled": true,
+    "backup_compression_level": 6,
+    "backup_directory": "move_history/",
+    "backup_format": "json",
+    "backup_frequency": "per_game",
+    "compress_backups": false,
+    "detailed_logging": true,
+    "enable_incremental_backups": true,
+    "enable_move_logging": true,
+    "log_board_states": true,
+    "log_evaluation_scores": true,
+    "log_policy_distributions": true,
+    "max_log_file_size": 100,
+    "retention_days": 30
+  },
+  "progress": {
+    "cli_progress_width": 80,
+    "display_growth_charts": true,
+    "enable_cli_progress": true,
+    "enable_gui_progress": true,
+    "enable_performance_metrics": true,
+    "gui_progress_height": 20,
+    "metrics_history_length": 100,
+    "progress_bar_style": "modern",
+    "refresh_rate": 10.0,
+    "show_detailed_metrics": true,
+    "show_eta": true,
+    "show_rate": true,
+    "update_frequency": 0.1
+  },
+  "validation": {
+    "auto_fix_minor_violations": false,
+    "detailed_violation_logging": true,
+    "enable_board_state_validation": true,
+    "enable_magical_piece_detection": true,
+    "enable_move_validation": true,
+    "log_violations": true,
+    "max_retries": 3,
+    "strict_piece_checking": true,
+    "validation_timeout": 5.0,
+    "violation_log_path": "logs/violations.json"
+  }
+}

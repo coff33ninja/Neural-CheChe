@@ -1,0 +1,53 @@
+{
+  "_description": "Debugging Configuration - Maximum logging and error reporting",
+  "_use_case": "Debugging and troubleshooting with maximum verbosity",
+  "core": {
+    "learning_rate": 0.005,
+    "games_per_generation": 2,
+    "training_steps_per_generation": 10,
+    "save_interval": 1,
+    "move_delay": 1.0
+  },
+  "validation": {
+    "enable_move_validation": true,
+    "strict_piece_checking": true,
+    "log_violations": true,
+    "detailed_violation_logging": true,
+    "validation_timeout": 30.0,
+    "auto_fix_minor_violations": false
+  },
+  "progress": {
+    "enable_cli_progress": true,
+    "enable_gui_progress": true,
+    "update_frequency": 0.01,
+    "show_detailed_metrics": true,
+    "display_growth_charts": true,
+    "enable_performance_metrics": true
+  },
+  "history": {
+    "enable_move_logging": true,
+    "backup_frequency": "per_move",
+    "detailed_logging": true,
+    "log_board_states": true,
+    "log_policy_distributions": true,
+    "log_evaluation_scores": true,
+    "retention_days": 3,
+    "compress_backups": false
+  },
+  "gui": {
+    "enable_visualization": true,
+    "show_captured_pieces": true,
+    "show_move_hints": true,
+    "show_coordinates": true,
+    "highlight_last_move": true,
+    "animation_speed": 0.1
+  },
+  "error_handling": {
+    "detailed_error_logging": true,
+    "notify_user_on_error": true,
+    "continue_on_component_failure": false,
+    "max_retry_attempts": 0,
+    "auto_recovery_enabled": false,
+    "crash_dump_enabled": true
+  }
+}

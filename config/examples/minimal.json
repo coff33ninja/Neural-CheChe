@@ -1,0 +1,33 @@
+{
+  "_description": "Minimal Configuration - Lowest resource usage",
+  "_use_case": "Resource-constrained environments or basic testing",
+  "core": {
+    "buffer_capacity": 10000,
+    "batch_size": 32,
+    "games_per_generation": 2,
+    "training_steps_per_generation": 10
+  },
+  "validation": {
+    "enable_move_validation": true,
+    "detailed_violation_logging": false,
+    "validation_timeout": 1.0
+  },
+  "progress": {
+    "enable_cli_progress": true,
+    "enable_gui_progress": false,
+    "update_frequency": 1.0,
+    "show_detailed_metrics": false,
+    "metrics_history_length": 10
+  },
+  "history": {
+    "enable_move_logging": false
+  },
+  "gui": {
+    "enable_visualization": false
+  },
+  "error_handling": {
+    "detailed_error_logging": false,
+    "max_retry_attempts": 1,
+    "auto_recovery_enabled": false
+  }
+}

@@ -1,0 +1,655 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Neural CheChe Configuration Schema",
+  "description": "Configuration schema for the Neural CheChe AI training system",
+  "type": "object",
+  "properties": {
+    "core": {
+      "type": "object",
+      "description": "Core training parameters",
+      "properties": {
+        "learning_rate": {
+          "type": "number",
+          "minimum": 0.0001,
+          "maximum": 0.1
+        },
+        "buffer_capacity": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 1000000
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 512
+        },
+        "training_steps_per_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "games_per_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "challenger_interval": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "wildcard_interval": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "challenger_threshold": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "move_delay": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 5.0
+        },
+        "max_moves_per_game": {
+          "type": "integer",
+          "minimum": 50,
+          "maximum": 1000
+        },
+        "save_interval": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "device": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "cpu",
+            "cuda"
+          ]
+        },
+        "random_seed": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "model_architecture": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "learning_rate",
+        "buffer_capacity",
+        "batch_size",
+        "training_steps_per_generation",
+        "games_per_generation",
+        "challenger_interval",
+        "wildcard_interval",
+        "challenger_threshold",
+        "move_delay",
+        "max_moves_per_game",
+        "save_interval",
+        "device",
+        "random_seed",
+        "model_architecture"
+      ]
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "enable_move_validation": {
+          "type": "boolean",
+          "description": "Enable/disable the entire move validation system",
+          "default": true
+        },
+        "strict_piece_checking": {
+          "type": "boolean",
+          "description": "Enable strict checking for piece integrity and magical piece detection",
+          "default": true
+        },
+        "log_violations": {
+          "type": "boolean",
+          "description": "Log validation violations to file for analysis",
+          "default": true
+        },
+        "violation_log_path": {
+          "type": "string",
+          "description": "Path to the JSON file where violations are logged",
+          "default": "logs/violations.json"
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Maximum number of retries when a move validation fails",
+          "default": 3
+        },
+        "enable_magical_piece_detection": {
+          "type": "boolean",
+          "description": "Detect and prevent AI from creating magical pieces",
+          "default": true
+        },
+        "enable_board_state_validation": {
+          "type": "boolean",
+          "description": "Validate board state consistency before and after moves",
+          "default": true
+        },
+        "validation_timeout": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 30.0,
+          "description": "Maximum time (seconds) to spend on move validation",
+          "default": 5.0
+        },
+        "detailed_violation_logging": {
+          "type": "boolean",
+          "description": "Include detailed information in violation logs",
+          "default": true
+        },
+        "auto_fix_minor_violations": {
+          "type": "boolean",
+          "description": "Automatically fix minor violations when possible",
+          "default": false
+        }
+      },
+      "required": [
+        "enable_move_validation",
+        "strict_piece_checking",
+        "log_violations",
+        "violation_log_path",
+        "max_retries",
+        "enable_magical_piece_detection",
+        "enable_board_state_validation",
+        "validation_timeout",
+        "detailed_violation_logging",
+        "auto_fix_minor_violations"
+      ],
+      "additionalProperties": false
+    },
+    "progress": {
+      "type": "object",
+      "properties": {
+        "enable_cli_progress": {
+          "type": "boolean",
+          "description": "Enable command-line progress bars using tqdm",
+          "default": true
+        },
+        "enable_gui_progress": {
+          "type": "boolean",
+          "description": "Enable graphical progress indicators in GUI mode",
+          "default": true
+        },
+        "update_frequency": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 5.0,
+          "description": "How often (seconds) to update progress displays",
+          "default": 0.1
+        },
+        "show_detailed_metrics": {
+          "type": "boolean",
+          "description": "Show detailed training metrics in progress displays",
+          "default": true
+        },
+        "display_growth_charts": {
+          "type": "boolean",
+          "description": "Show generational growth charts in GUI",
+          "default": true
+        },
+        "progress_bar_style": {
+          "type": "string",
+          "enum": [
+            "modern",
+            "classic",
+            "minimal",
+            "detailed"
+          ],
+          "description": "Visual style for progress bars (modern, classic, minimal, detailed)",
+          "default": "modern"
+        },
+        "cli_progress_width": {
+          "type": "integer",
+          "minimum": 40,
+          "maximum": 200,
+          "description": "Width of CLI progress bars in characters",
+          "default": 80
+        },
+        "gui_progress_height": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 50,
+          "description": "Height of GUI progress bars in pixels",
+          "default": 20
+        },
+        "metrics_history_length": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 1000,
+          "description": "Number of historical metric points to keep",
+          "default": 100
+        },
+        "enable_performance_metrics": {
+          "type": "boolean",
+          "description": "Track and display performance metrics",
+          "default": true
+        },
+        "show_eta": {
+          "type": "boolean",
+          "description": "Show estimated time of arrival in progress displays",
+          "default": true
+        },
+        "show_rate": {
+          "type": "boolean",
+          "description": "Show processing rate in progress displays",
+          "default": true
+        },
+        "refresh_rate": {
+          "type": "number",
+          "minimum": 1.0,
+          "maximum": 60.0,
+          "description": "Maximum refresh rate (Hz) for progress displays",
+          "default": 10.0
+        }
+      },
+      "required": [
+        "enable_cli_progress",
+        "enable_gui_progress",
+        "update_frequency",
+        "show_detailed_metrics",
+        "display_growth_charts",
+        "progress_bar_style",
+        "cli_progress_width",
+        "gui_progress_height",
+        "metrics_history_length",
+        "enable_performance_metrics",
+        "show_eta",
+        "show_rate",
+        "refresh_rate"
+      ],
+      "additionalProperties": false
+    },
+    "history": {
+      "type": "object",
+      "properties": {
+        "enable_move_logging": {
+          "type": "boolean",
+          "description": "Enable comprehensive move logging to JSON files",
+          "default": true
+        },
+        "backup_directory": {
+          "type": "string",
+          "description": "Directory where move history and backups are stored",
+          "default": "move_history/"
+        },
+        "backup_frequency": {
+          "type": "string",
+          "enum": [
+            "per_move",
+            "per_game",
+            "per_generation",
+            "manual"
+          ],
+          "description": "When to create backups (per_move, per_game, per_generation, manual)",
+          "default": "per_game"
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Number of days to keep backup files before cleanup",
+          "default": 30
+        },
+        "compress_backups": {
+          "type": "boolean",
+          "description": "Compress backup files to save disk space",
+          "default": false
+        },
+        "detailed_logging": {
+          "type": "boolean",
+          "description": "Include detailed information in move logs",
+          "default": true
+        },
+        "log_board_states": {
+          "type": "boolean",
+          "description": "Log complete board states before and after moves",
+          "default": true
+        },
+        "log_policy_distributions": {
+          "type": "boolean",
+          "description": "Log AI policy distributions for move analysis",
+          "default": true
+        },
+        "log_evaluation_scores": {
+          "type": "boolean",
+          "description": "Log position evaluation scores",
+          "default": true
+        },
+        "max_log_file_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum size (MB) for individual log files before rotation",
+          "default": 100
+        },
+        "backup_format": {
+          "type": "string",
+          "enum": [
+            "json",
+            "msgpack",
+            "pickle"
+          ],
+          "description": "Format for backup files (json, msgpack, pickle)",
+          "default": "json"
+        },
+        "enable_incremental_backups": {
+          "type": "boolean",
+          "description": "Create incremental backups to save space",
+          "default": true
+        },
+        "backup_compression_level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9,
+          "description": "Compression level (1-9) when compression is enabled",
+          "default": 6
+        },
+        "auto_cleanup_enabled": {
+          "type": "boolean",
+          "description": "Automatically clean up old backup files",
+          "default": true
+        }
+      },
+      "required": [
+        "enable_move_logging",
+        "backup_directory",
+        "backup_frequency",
+        "retention_days",
+        "compress_backups",
+        "detailed_logging",
+        "log_board_states",
+        "log_policy_distributions",
+        "log_evaluation_scores",
+        "max_log_file_size",
+        "backup_format",
+        "enable_incremental_backups",
+        "backup_compression_level",
+        "auto_cleanup_enabled"
+      ],
+      "additionalProperties": false
+    },
+    "gui": {
+      "type": "object",
+      "properties": {
+        "enable_visualization": {
+          "type": "boolean",
+          "description": "Enable the graphical user interface",
+          "default": true
+        },
+        "adaptive_layout": {
+          "type": "boolean",
+          "description": "Automatically adapt layout to window size changes",
+          "default": true
+        },
+        "minimum_window_size": {
+          "type": "array",
+          "description": "Minimum allowed window size [width, height]",
+          "default": [
+            800,
+            600
+          ]
+        },
+        "default_window_size": {
+          "type": "array",
+          "description": "Default window size when application starts [width, height]",
+          "default": [
+            1200,
+            800
+          ]
+        },
+        "maximum_window_size": {
+          "type": "array",
+          "description": "Maximum allowed window size [width, height]",
+          "default": [
+            1920,
+            1080
+          ]
+        },
+        "show_captured_pieces": {
+          "type": "boolean",
+          "description": "Display captured pieces for each player",
+          "default": true
+        },
+        "progress_bar_style": {
+          "type": "string",
+          "enum": [
+            "modern",
+            "classic",
+            "minimal",
+            "detailed"
+          ],
+          "description": "Visual style for progress bars",
+          "default": "modern"
+        },
+        "auto_resize_elements": {
+          "type": "boolean",
+          "description": "Automatically resize UI elements with window",
+          "default": true
+        },
+        "theme": {
+          "type": "string",
+          "enum": [
+            "default",
+            "dark",
+            "light",
+            "high_contrast",
+            "colorblind"
+          ],
+          "description": "Visual theme (default, dark, light, high_contrast, colorblind)",
+          "default": "default"
+        },
+        "font_size": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 24,
+          "description": "Font size for UI text",
+          "default": 12
+        },
+        "board_size": {
+          "type": "integer",
+          "minimum": 200,
+          "maximum": 800,
+          "description": "Size of the game board in pixels",
+          "default": 400
+        },
+        "piece_size": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 80,
+          "description": "Size of game pieces in pixels",
+          "default": 40
+        },
+        "animation_speed": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 5.0,
+          "description": "Speed multiplier for animations",
+          "default": 1.0
+        },
+        "show_move_hints": {
+          "type": "boolean",
+          "description": "Show visual hints for possible moves",
+          "default": true
+        },
+        "show_coordinates": {
+          "type": "boolean",
+          "description": "Show board coordinates (A-H, 1-8)",
+          "default": true
+        },
+        "highlight_last_move": {
+          "type": "boolean",
+          "description": "Highlight the last move made",
+          "default": true
+        },
+        "enable_sound": {
+          "type": "boolean",
+          "description": "Enable sound effects",
+          "default": false
+        },
+        "fullscreen_mode": {
+          "type": "boolean",
+          "description": "Start in fullscreen mode",
+          "default": false
+        },
+        "vsync_enabled": {
+          "type": "boolean",
+          "description": "Enable vertical sync for smooth rendering",
+          "default": true
+        },
+        "fps_limit": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 144,
+          "description": "Maximum frames per second",
+          "default": 60
+        }
+      },
+      "required": [
+        "enable_visualization",
+        "adaptive_layout",
+        "minimum_window_size",
+        "default_window_size",
+        "maximum_window_size",
+        "show_captured_pieces",
+        "progress_bar_style",
+        "auto_resize_elements",
+        "theme",
+        "font_size",
+        "board_size",
+        "piece_size",
+        "animation_speed",
+        "show_move_hints",
+        "show_coordinates",
+        "highlight_last_move",
+        "enable_sound",
+        "fullscreen_mode",
+        "vsync_enabled",
+        "fps_limit"
+      ],
+      "additionalProperties": false
+    },
+    "error_handling": {
+      "type": "object",
+      "properties": {
+        "graceful_degradation": {
+          "type": "boolean",
+          "description": "Continue operation with reduced functionality when components fail",
+          "default": true
+        },
+        "retry_failed_operations": {
+          "type": "boolean",
+          "description": "Automatically retry failed operations",
+          "default": true
+        },
+        "log_errors": {
+          "type": "boolean",
+          "description": "Log all errors to file for debugging",
+          "default": true
+        },
+        "continue_on_component_failure": {
+          "type": "boolean",
+          "description": "Continue training even if non-critical components fail",
+          "default": true
+        },
+        "max_retry_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Maximum number of retry attempts for failed operations",
+          "default": 3
+        },
+        "retry_delay": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10.0,
+          "description": "Initial delay (seconds) between retry attempts",
+          "default": 1.0
+        },
+        "exponential_backoff": {
+          "type": "boolean",
+          "description": "Use exponential backoff for retry delays",
+          "default": true
+        },
+        "error_log_path": {
+          "type": "string",
+          "description": "Path to the error log file",
+          "default": "logs/errors.log"
+        },
+        "detailed_error_logging": {
+          "type": "boolean",
+          "description": "Include stack traces and detailed context in error logs",
+          "default": true
+        },
+        "notify_user_on_error": {
+          "type": "boolean",
+          "description": "Show error notifications to the user",
+          "default": true
+        },
+        "auto_recovery_enabled": {
+          "type": "boolean",
+          "description": "Attempt automatic recovery from common errors",
+          "default": true
+        },
+        "fallback_mode_enabled": {
+          "type": "boolean",
+          "description": "Enable fallback modes when primary systems fail",
+          "default": true
+        },
+        "error_reporting_enabled": {
+          "type": "boolean",
+          "description": "Enable anonymous error reporting for debugging",
+          "default": false
+        },
+        "crash_dump_enabled": {
+          "type": "boolean",
+          "description": "Create crash dumps for severe errors",
+          "default": true
+        },
+        "memory_cleanup_on_error": {
+          "type": "boolean",
+          "description": "Clean up memory when errors occur",
+          "default": true
+        }
+      },
+      "required": [
+        "graceful_degradation",
+        "retry_failed_operations",
+        "log_errors",
+        "continue_on_component_failure",
+        "max_retry_attempts",
+        "retry_delay",
+        "exponential_backoff",
+        "error_log_path",
+        "detailed_error_logging",
+        "notify_user_on_error",
+        "auto_recovery_enabled",
+        "fallback_mode_enabled",
+        "error_reporting_enabled",
+        "crash_dump_enabled",
+        "memory_cleanup_on_error"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "core",
+    "validation",
+    "progress",
+    "history",
+    "gui",
+    "error_handling"
+  ]
+}
