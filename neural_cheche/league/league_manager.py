@@ -14,6 +14,8 @@ from ..progress import ProgressManager
 from ..config import ConfigManager
 from ..validation import MoveValidator
 from ..history import MoveLogger, BackupManager
+from ..error_handling import ErrorHandler, ErrorCategory, ErrorSeverity, RecoveryManager, UserNotifier
+from ..error_handling.decorators import handle_errors
 
 
 class LeagueManager:
@@ -70,9 +72,9 @@ class LeagueManager:
         self._initialize_progress_tracking()
         
         # Initialize new enhancement systems
+        self._initialize_error_handling_system()
         self._initialize_validation_system()
         self._initialize_history_system()
-        self._initialize_error_handling()
         
         print("✅ League Manager initialized successfully")
     
@@ -121,6 +123,14 @@ class LeagueManager:
             print(f"❌ Error initializing agents: {e}")
             raise
     
+    @handle_errors(
+        category=ErrorCategory.PROGRESS,
+        severity=ErrorSeverity.LOW,
+        component="progress_tracking",
+        recovery_scenario="progress_display_failed",
+        max_retries=1,
+        suppress_errors=True
+    )
     def _initialize_progress_tracking(self):
         """Initialize progress tracking system"""
         try:
@@ -175,6 +185,13 @@ class LeagueManager:
         
         return config
     
+    @handle_errors(
+        category=ErrorCategory.VALIDATION,
+        severity=ErrorSeverity.HIGH,
+        component="validation_system",
+        recovery_scenario="validation_timeout",
+        max_retries=2
+    )
     def _initialize_validation_system(self):
         """Initialize move validation system"""
         try:
@@ -204,6 +221,13 @@ class LeagueManager:
             if not self.config_manager.error_handling.should_continue_on_failure():
                 raise
     
+    @handle_errors(
+        category=ErrorCategory.HISTORY,
+        severity=ErrorSeverity.MEDIUM,
+        component="history_system",
+        recovery_scenario="history_logging_failed",
+        max_retries=2
+    )
     def _initialize_history_system(self):
         """Initialize move logging and backup system"""
         try:
@@ -236,32 +260,69 @@ class LeagueManager:
             if not self.config_manager.error_handling.should_continue_on_failure():
                 raise
     
-    def _initialize_error_handling(self):
-        """Initialize unified error handling system"""
+    def _initialize_error_handling_system(self):
+        """Initialize comprehensive error handling system"""
         try:
-            # Set error handling configuration for all components
+            # Initialize error handler
             error_config = {
-                'graceful_degradation': self.config_manager.error_handling.should_use_graceful_degradation(),
-                'retry_on_failure': self.config_manager.error_handling.should_retry_on_failure(),
-                'max_retries': self.config_manager.error_handling.get('max_retry_attempts', 3),
+                'log_errors': self.config_manager.error_handling.get('log_errors', True),
+                'log_file': self.config_manager.error_handling.get('error_log_path', 'logs/errors.log'),
+                'enable_recovery': self.config_manager.error_handling.get('auto_recovery_enabled', True),
+                'max_retry_attempts': self.config_manager.error_handling.get('max_retry_attempts', 3),
                 'continue_on_failure': self.config_manager.error_handling.should_continue_on_failure(),
-                'log_errors': self.config_manager.error_handling.get('log_errors', True)
+                'graceful_degradation': self.config_manager.error_handling.should_use_graceful_degradation(),
+                'notify_user': self.config_manager.error_handling.get('notify_user_on_error', True)
             }
             
-            # Apply error handling to competition
-            if hasattr(self.competition, 'set_error_handling'):
-                self.competition.set_error_handling(error_config)
+            self.error_handler = ErrorHandler(error_config)
+            self.recovery_manager = RecoveryManager(error_config)
+            self.user_notifier = UserNotifier(error_config)
             
-            # Apply error handling to progress manager
-            if self.progress_manager and hasattr(self.progress_manager, 'set_error_handling'):
-                self.progress_manager.set_error_handling(error_config)
+            # Register recovery callbacks
+            self._register_recovery_callbacks()
             
-            print("🔧 Unified error handling initialized")
+            print("🔧 Comprehensive error handling system initialized")
             
         except Exception as e:
-            print(f"⚠️ Failed to initialize error handling: {e}")
-            if not self.config_manager.error_handling.should_continue_on_failure():
-                raise
+            print(f"⚠️ Failed to initialize error handling system: {e}")
+            # Create minimal error handling if full system fails
+            self.error_handler = None
+            self.recovery_manager = None
+            self.user_notifier = None
+    
+    def _register_recovery_callbacks(self):
+        """Register recovery callbacks for common scenarios"""
+        if not self.error_handler or not self.recovery_manager:
+            return
+        
+        # Register configuration recovery
+        def config_recovery_callback(error_info):
+            try:
+                self.config_manager.reset_to_defaults()
+                return True
+            except Exception:
+                return False
+        
+        self.error_handler.register_recovery_callback(
+            ErrorCategory.CONFIGURATION,
+            config_recovery_callback
+        )
+        
+        # Register GUI recovery
+        def gui_recovery_callback(error_info):
+            try:
+                # Disable GUI and continue with CLI
+                self.config_manager.gui.set('enable_visualization', False)
+                if self.visualization_manager:
+                    self.visualization_manager = None
+                return True
+            except Exception:
+                return False
+        
+        self.error_handler.register_recovery_callback(
+            ErrorCategory.GUI,
+            gui_recovery_callback
+        )
     
     def get_system_status(self):
         """Get status of all enhancement systems"""
@@ -287,8 +348,11 @@ class LeagueManager:
                 'visualization_manager': self.visualization_manager is not None
             },
             'error_handling': {
+                'enabled': self.error_handler is not None,
                 'graceful_degradation': self.config_manager.error_handling.should_use_graceful_degradation(),
-                'continue_on_failure': self.config_manager.error_handling.should_continue_on_failure()
+                'continue_on_failure': self.config_manager.error_handling.should_continue_on_failure(),
+                'recovery_manager': self.recovery_manager is not None,
+                'user_notifier': self.user_notifier is not None
             }
         }
     
@@ -296,10 +360,39 @@ class LeagueManager:
         """Save current configuration to file"""
         try:
             self.config_manager.save_to_file(filepath)
-            print(f"✅ Configuration saved successfully")
+            print("✅ Configuration saved successfully")
         except Exception as e:
             print(f"❌ Failed to save configuration: {e}")
     
+    def get_error_statistics(self):
+        """Get comprehensive error statistics"""
+        if not self.error_handler:
+            return {'error': 'Error handling system not initialized'}
+        
+        stats = {
+            'error_handler': self.error_handler.get_error_statistics(),
+            'recovery_manager': self.recovery_manager.get_recovery_statistics() if self.recovery_manager else {},
+            'user_notifier': self.user_notifier.get_notification_statistics() if self.user_notifier else {}
+        }
+        
+        return stats
+    
+    def clear_error_history(self):
+        """Clear all error history"""
+        if self.error_handler:
+            self.error_handler.clear_error_history()
+        if self.recovery_manager:
+            self.recovery_manager.clear_recovery_history()
+        if self.user_notifier:
+            self.user_notifier.clear_notification_history()
+        print("🧹 All error history cleared")
+    
+    @handle_errors(
+        category=ErrorCategory.TRAINING,
+        severity=ErrorSeverity.CRITICAL,
+        component="training_loop",
+        max_retries=1
+    )
     def run_training(self, num_generations=100):
         """Run the main training loop"""
         print(f"🎯 Starting training for {num_generations} generations")
